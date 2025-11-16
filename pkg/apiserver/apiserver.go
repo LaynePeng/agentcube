@@ -20,6 +20,7 @@ type Server struct {
 	k8sClient         *K8sClient
 	sandboxController *controller.SandboxReconciler
 	sandboxStore      *SandboxStore
+	tokenCache        *TokenCache
 }
 
 // NewServer creates a new API server instance
@@ -29,7 +30,7 @@ func NewServer(config *Config, sandboxController *controller.SandboxReconciler) 
 	}
 
 	// Create Kubernetes client
-	k8sClient, err := NewK8sClient(config.Namespace)
+	k8sClient, err := NewK8sClient()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Kubernetes client: %w", err)
 	}
@@ -37,11 +38,15 @@ func NewServer(config *Config, sandboxController *controller.SandboxReconciler) 
 	// Create sandbox store
 	sandboxStore := NewSandboxStore()
 
+	// Create token cache (cache up to 1000 tokens, 5min TTL)
+	tokenCache := NewTokenCache(1000, 5*time.Minute)
+
 	server := &Server{
 		config:            config,
 		k8sClient:         k8sClient,
 		sandboxStore:      sandboxStore,
 		sandboxController: sandboxController,
+		tokenCache:        tokenCache,
 	}
 
 	// Setup routes
@@ -53,7 +58,7 @@ func NewServer(config *Config, sandboxController *controller.SandboxReconciler) 
 // InitializeStore initializes the sandbox store with Kubernetes informer
 func (s *Server) InitializeStore(ctx context.Context) error {
 	informer := s.k8sClient.GetSandboxInformer()
-	return s.sandboxStore.InitializeWithInformer(ctx, informer, s.k8sClient, s.config.Namespace)
+	return s.sandboxStore.InitializeWithInformer(ctx, informer, s.k8sClient)
 }
 
 // setupRoutes configures HTTP routes

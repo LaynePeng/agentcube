@@ -28,6 +28,19 @@ func (s *Server) handleTunnel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Extract user information from context for authorization
+	_, _, _, serviceAccountName := extractUserInfo(r)
+	if serviceAccountName == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Check if user has access to this sandbox
+	if !s.checkSandboxAccess(sandbox, serviceAccountName) {
+		http.Error(w, "Forbidden: You don't have permission to access this sandbox", http.StatusForbidden)
+		return
+	}
+
 	// Check if method is CONNECT
 	if r.Method != http.MethodConnect {
 		http.Error(w, "Method not allowed, use CONNECT", http.StatusMethodNotAllowed)
@@ -35,7 +48,7 @@ func (s *Server) handleTunnel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get sandbox pod IP and SSH port
-	podIP, err := s.k8sClient.GetSandboxPodIP(r.Context(), sandbox.SandboxName)
+	podIP, err := s.k8sClient.GetSandboxPodIP(r.Context(), sandbox.Namespace, sandbox.SandboxName)
 	if err != nil {
 		log.Printf("Failed to get pod IP for sandbox %s: %v", sandboxID, err)
 		http.Error(w, "Sandbox not ready", http.StatusServiceUnavailable)
@@ -92,7 +105,7 @@ func (s *Server) handleTunnel(w http.ResponseWriter, r *http.Request) {
 		defer wg.Done()
 		// update sandbox last activity timestamp
 		// TODO: improve here to reduce the processing latency of the cmd command
-		err := s.k8sClient.UpdateSandboxLastActivityWithPatch(r.Context(), sandbox.SandboxName, sandbox.LastActivityAt)
+		err := s.k8sClient.UpdateSandboxLastActivityWithPatch(r.Context(), sandbox.Namespace, sandbox.SandboxName, sandbox.LastActivityAt)
 		if err != nil {
 			log.Printf("Failed to update last activity time for sandbox %s, err %v", sandbox.SandboxName, err)
 		}
