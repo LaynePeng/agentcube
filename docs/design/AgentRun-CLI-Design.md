@@ -23,7 +23,14 @@ After completing development, the CLI enables the following steps:
 2. `agentrun build -f ./` Builds a container image from the workspace, compatible with AgentCube’s Kubernetes-based runtime environment
 3. `agentrun publish -f /` Publishes the built agent image to AgentCube, making it available for invocation, sharing, and collaboration
 
-## Use Case 2: Invoke published Agent
+Use Case 2: Check Published Agent Status
+After publishing an agent to AgentCube, a developer may want to verify that the agent is fully registered and ready for use. The CLI provides a simple status check command:
+
+```agentrun status -f ./```
+
+This command queries AgentCube for the current state of the agent associated with the workspace. It returns key information such as the agent ID, endpoint URL, latest version, and log reference. This helps ensure the agent is correctly deployed and ready for invocation.
+
+## Use Case 3: Invoke published Agent
 After publishing an agent to AgentCube, a developer may want to invoke it for testing purposes or integrate it into other system components. The CLI provides a simple and consistent interface to trigger agent execution using the local workspace directory and a structured payload:
 
 ```agentrun invoke -f ./ -payload {"prompt": "what is the weather today in Shanghai?"}```
