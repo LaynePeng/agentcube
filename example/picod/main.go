@@ -52,6 +52,12 @@ func main() {
 
 	log.Printf("Configuration:")
 	log.Printf("  PicoD URL: %s", picodURL)
+
+	if picodURL == defaultPicoDURL {
+		log.Println("  ℹ️  To use a different PicoD server:")
+		log.Println("      export PICOD_URL=http://localhost:9529")
+		log.Println()
+	}
 	log.Println()
 
 	// Step 0: Health check
@@ -86,15 +92,15 @@ func main() {
 	// Step 2: Upload file via multipart
 	log.Println("Step 2: Uploading file via multipart/form-data...")
 	uploadContent := "Hello from PicoD!\nThis file was uploaded via REST API multipart."
-	if err := uploadFileMultipart(picodURL, "/workspace/upload.txt", uploadContent); err != nil {
+	if err := uploadFileMultipart(picodURL, "./upload.txt", uploadContent); err != nil {
 		log.Fatalf("Failed to upload file: %v", err)
 	}
-	log.Println("✅ File uploaded to /workspace/upload.txt")
+	log.Println("✅ File uploaded to ./upload.txt")
 	log.Println()
 
 	// Step 3: Verify uploaded file
 	log.Println("Step 3: Verifying uploaded file...")
-	output, err := executeCommand(picodURL, "cat /workspace/upload.txt")
+	output, err := executeCommand(picodURL, "cat ./upload.txt")
 	if err != nil {
 		log.Fatalf("Failed to read file: %v", err)
 	}
@@ -125,22 +131,22 @@ output_data = {
     "message": "Generated successfully via PicoD!"
 }
 
-with open('/workspace/output.json', 'w') as f:
+with open('./output.json', 'w') as f:
     json.dump(output_data, f, indent=2)
 
 print(f"Generated {n} Fibonacci numbers")
 print(f"Sum: {sum(fibonacci)}")
 `
 
-	if err := uploadFileJSON(picodURL, "/workspace/fibonacci.py", pythonScript); err != nil {
+	if err := uploadFileJSON(picodURL, "./fibonacci.py", pythonScript); err != nil {
 		log.Fatalf("Failed to write Python script: %v", err)
 	}
-	log.Println("✅ Python script written to /workspace/fibonacci.py")
+	log.Println("✅ Python script written to ./fibonacci.py")
 	log.Println()
 
 	// Step 5: Execute Python script
 	log.Println("Step 5: Executing Python script...")
-	output, err = executeCommand(picodURL, "python3 /workspace/fibonacci.py")
+	output, err = executeCommand(picodURL, "python3 ./fibonacci.py")
 	if err != nil {
 		log.Fatalf("Failed to execute Python script: %v", err)
 	}
@@ -150,7 +156,7 @@ print(f"Sum: {sum(fibonacci)}")
 	// Step 6: Download generated file
 	log.Println("Step 6: Downloading generated output file...")
 	localOutputPath := "/tmp/picod_output.json"
-	if err := downloadFile(picodURL, "/workspace/output.json", localOutputPath); err != nil {
+	if err := downloadFile(picodURL, "./output.json", localOutputPath); err != nil {
 		log.Fatalf("Failed to download output file: %v", err)
 	}
 	log.Printf("✅ Output file downloaded to %s", localOutputPath)
