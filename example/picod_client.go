@@ -18,12 +18,6 @@ const (
 	defaultPicoDURL = "http://localhost:9527"
 )
 
-var (
-	// accessToken 是用于认证的 Bearer token
-	// 通过 PICOD_ACCESS_TOKEN 环境变量设置
-	accessToken string
-)
-
 // ExecuteRequest 命令执行请求
 type ExecuteRequest struct {
 	Command    string            `json:"command"`
@@ -55,19 +49,10 @@ func main() {
 	log.Println()
 
 	picodURL := getEnv("PICOD_URL", defaultPicoDURL)
-	accessToken = os.Getenv("PICOD_ACCESS_TOKEN")
 
 	log.Printf("Configuration:")
 	log.Printf("  PicoD URL: %s", picodURL)
-
-	if accessToken == "" {
-		log.Println("⚠️  WARNING: PICOD_ACCESS_TOKEN environment variable not set")
-		log.Println("   Attempting to proceed without authentication token")
-		log.Println()
-	} else {
-		log.Printf("✅ Access token loaded: %s...", accessToken[:10])
-		log.Println()
-	}
+	log.Println()
 
 	// Step 0: Health check
 	log.Println("Step 0: Health check...")
@@ -253,9 +238,6 @@ func executeCommand(baseURL, command string) (string, error) {
 	}
 
 	httpReq.Header.Set("Content-Type", "application/json")
-	if accessToken != "" {
-		httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", accessToken))
-	}
 
 	client := &http.Client{Timeout: 60 * time.Second}
 	resp, err := client.Do(httpReq)
@@ -315,9 +297,6 @@ func uploadFileMultipart(baseURL, remotePath, content string) error {
 	}
 
 	httpReq.Header.Set("Content-Type", writer.FormDataContentType())
-	if accessToken != "" {
-		httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", accessToken))
-	}
 
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(httpReq)
@@ -355,9 +334,6 @@ func uploadFileJSON(baseURL, remotePath, content string) error {
 	}
 
 	httpReq.Header.Set("Content-Type", "application/json")
-	if accessToken != "" {
-		httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", accessToken))
-	}
 
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(httpReq)
@@ -382,10 +358,6 @@ func downloadFile(baseURL, remotePath, localPath string) error {
 	httpReq, err := http.NewRequest("GET", fmt.Sprintf("%s/api/files/%s", baseURL, cleanPath), nil)
 	if err != nil {
 		return err
-	}
-
-	if accessToken != "" {
-		httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", accessToken))
 	}
 
 	client := &http.Client{Timeout: 30 * time.Second}
@@ -428,4 +400,3 @@ func indentOutput(output string) string {
 	}
 	return strings.Join(indented, "\n")
 }
-

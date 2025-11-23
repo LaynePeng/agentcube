@@ -3,7 +3,6 @@ package picod
 import (
 	"encoding/base64"
 	"fmt"
-	"io"
 	"log"
 	"mime"
 	"net/http"
@@ -34,7 +33,7 @@ type UploadFileRequest struct {
 // UploadFileHandler 处理文件上传请求
 func UploadFileHandler(c *gin.Context) {
 	contentType := c.ContentType()
-	
+
 	// 判断请求类型：multipart 或 JSON
 	if strings.HasPrefix(contentType, "multipart/form-data") {
 		handleMultipartUpload(c)
@@ -271,11 +270,11 @@ func sanitizePath(p string) (string, error) {
 		return "", fmt.Errorf("invalid path: directory traversal detected")
 	}
 
-	// 确保路径是绝对路径
-	if !filepath.IsAbs(cleanPath) {
-		cleanPath = filepath.Join("/", cleanPath)
+	// 如果已经是绝对路径，直接返回
+	if filepath.IsAbs(cleanPath) {
+		return cleanPath, nil
 	}
 
+	// 相对路径保持不变，允许在当前工作目录操作
 	return cleanPath, nil
 }
-

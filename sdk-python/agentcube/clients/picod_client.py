@@ -41,26 +41,18 @@ class PicoDClient:
         self,
         host: str,
         port: int = 9527,
-        access_token: Optional[str] = None,
         timeout: int = 30,
     ):
         """初始化 PicoD 客户端连接参数
-        
+
         Args:
             host: PicoD 服务器主机名或 IP 地址
             port: PicoD 服务器端口 (默认: 9527)
-            access_token: 认证访问令牌 (可选)
             timeout: 默认请求超时时间（秒）
         """
         self.base_url = f"http://{host}:{port}"
-        self.access_token = access_token
         self.timeout = timeout
         self.session = requests.Session()
-        
-        if access_token:
-            self.session.headers.update({
-                "Authorization": f"Bearer {access_token}",
-            })
     
     def execute_command(
         self,
@@ -221,14 +213,8 @@ class PicoDClient:
             files = {'file': f}
             data = {'path': remote_path, 'mode': '0644'}
             
-            # 只使用 Authorization header
-            headers = {}
-            if self.access_token:
-                headers["Authorization"] = f"Bearer {self.access_token}"
-            
             response = requests.post(
                 f"{self.base_url}/api/files",
-                headers=headers,
                 files=files,
                 data=data,
                 timeout=self.timeout,
@@ -287,12 +273,12 @@ class PicoDClient:
     @staticmethod
     def generate_ssh_key_pair():
         """生成 SSH 密钥对（不适用于 PicoD）
-        
+
         此方法保留以与 SandboxSSHClient 的 API 兼容，
-        但会抛出 NotImplementedError，因为 PicoD 使用基于令牌的认证。
+        但会抛出 NotImplementedError，因为 PicoD 不使用 SSH 认证。
         """
         raise NotImplementedError(
-            "PicoD uses token-based authentication, not SSH keys. "
-            "Please provide an access token when initializing the client."
+            "PicoD does not use SSH authentication. "
+            "This method is not applicable for PicoD client."
         )
 
