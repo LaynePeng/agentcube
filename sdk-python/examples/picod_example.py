@@ -47,8 +47,7 @@ def main():
         
         client = PicoDClient(
             host=HOST,
-            port=PORT,
-            access_token=ACCESS_TOKEN
+            port=PORT
         )
         log.info("✅ PicoD client initialized\n")
         
@@ -73,12 +72,12 @@ def main():
         with open("/tmp/upload.txt", "w", encoding="utf-8") as f:
             f.write(upload_content)
         
-        client.upload_file("/tmp/upload.txt", "/workspace/upload.txt")
-        log.info("✅ Uploaded file to /workspace/upload.txt\n")
-        
+        client.upload_file("/tmp/upload.txt", "./upload.txt")
+        log.info("✅ Uploaded file to ./upload.txt\n")
+
         # Step 3: Verify uploaded file
         log.info("Step 3: Verifying uploaded file...")
-        output = client.execute_command("cat /workspace/upload.txt")
+        output = client.execute_command("cat ./upload.txt")
         log.info(f"   File content: {output.strip()}\n")
         
         # Step 4: Write Python script
@@ -95,7 +94,7 @@ def generate_fibonacci(n):
 
 n = 20
 fib = generate_fibonacci(n)
-with open('/workspace/output.json', 'w') as f:
+with open('./output.json', 'w') as f:
     json.dump({
         "timestamp": datetime.now().isoformat(),
         "count": n,
@@ -104,19 +103,19 @@ with open('/workspace/output.json', 'w') as f:
     }, f, indent=2)
 print(f"Generated {n} Fibonacci numbers")
 """
-        client.write_file(script_content, "/workspace/fib.py")
-        log.info("✅ Write Content to /workspace/fib.py\n")
-        
+        client.write_file(script_content, "./fib.py")
+        log.info("✅ Write Content to ./fib.py\n")
+
         # Step 5: Execute script
         log.info("Step 5: Executing Python script...")
-        output = client.execute_command("python3 /workspace/fib.py")
+        output = client.execute_command("python3 ./fib.py")
         log.info(f"   Output: {output.strip()}\n")
         
         # Step 6: Download result file
         log.info("Step 6: Downloading output file...")
         local_path = "/tmp/pico_output.json"
-        client.download_file("/workspace/output.json", local_path)
-        client.download_file("/workspace/upload.txt", "/tmp/download.txt")
+        client.download_file("./output.json", local_path)
+        client.download_file("./upload.txt", "/tmp/download.txt")
         log.info(f"✅ File downloaded to {local_path}\n")
         
         # Step 7: Verify results
