@@ -15,7 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// FileInfo 定义文件信息响应体
+// FileInfo defines file information response body
 type FileInfo struct {
 	Path     string    `json:"path"`
 	Size     int64     `json:"size"`
@@ -23,18 +23,18 @@ type FileInfo struct {
 	Modified time.Time `json:"modified"`
 }
 
-// UploadFileRequest 定义 JSON 上传请求体
+// UploadFileRequest defines JSON upload request body
 type UploadFileRequest struct {
 	Path    string `json:"path" binding:"required"`
 	Content string `json:"content" binding:"required"` // Base64 encoded content
 	Mode    string `json:"mode"`
 }
 
-// UploadFileHandler 处理文件上传请求
+// UploadFileHandler handles file upload requests
 func UploadFileHandler(c *gin.Context) {
 	contentType := c.ContentType()
 
-	// 判断请求类型：multipart 或 JSON
+	// Determine request type: multipart or JSON
 	if strings.HasPrefix(contentType, "multipart/form-data") {
 		handleMultipartUpload(c)
 	} else {
@@ -61,7 +61,7 @@ func handleMultipartUpload(c *gin.Context) {
 		return
 	}
 
-	// 确保路径安全
+	// Ensure path safety
 	safePath, err := sanitizePath(path)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -71,7 +71,7 @@ func handleMultipartUpload(c *gin.Context) {
 		return
 	}
 
-	// 创建目录
+	// Create directory
 	dir := filepath.Dir(safePath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -81,7 +81,7 @@ func handleMultipartUpload(c *gin.Context) {
 		return
 	}
 
-	// 保存文件
+	// Save file
 	if err := c.SaveUploadedFile(fileHeader, safePath); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": fmt.Sprintf("Failed to save file: %v", err),
@@ -90,7 +90,7 @@ func handleMultipartUpload(c *gin.Context) {
 		return
 	}
 
-	// 设置文件权限
+	// Set file permissions
 	modeStr := c.PostForm("mode")
 	if modeStr != "" {
 		mode, err := strconv.ParseUint(modeStr, 8, 32)
@@ -130,7 +130,7 @@ func handleJSONBase64Upload(c *gin.Context) {
 		return
 	}
 
-	// 确保路径安全
+	// Ensure path safety
 	safePath, err := sanitizePath(req.Path)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -140,7 +140,7 @@ func handleJSONBase64Upload(c *gin.Context) {
 		return
 	}
 
-	// 解码 Base64 内容
+	// Decode Base64 content
 	decodedContent, err := base64.StdEncoding.DecodeString(req.Content)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -150,7 +150,7 @@ func handleJSONBase64Upload(c *gin.Context) {
 		return
 	}
 
-	// 创建目录
+	// Create directory
 	dir := filepath.Dir(safePath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -160,7 +160,7 @@ func handleJSONBase64Upload(c *gin.Context) {
 		return
 	}
 
-	// 写入文件
+	// Write file
 	err = os.WriteFile(safePath, decodedContent, 0644)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -170,7 +170,7 @@ func handleJSONBase64Upload(c *gin.Context) {
 		return
 	}
 
-	// 设置文件权限
+	// Set file permissions
 	if req.Mode != "" {
 		mode, err := strconv.ParseUint(req.Mode, 8, 32)
 		if err != nil {
@@ -199,7 +199,7 @@ func handleJSONBase64Upload(c *gin.Context) {
 	})
 }
 
-// DownloadFileHandler 处理文件下载请求
+// DownloadFileHandler handles file download requests
 func DownloadFileHandler(c *gin.Context) {
 	path := c.Param("path")
 	if path == "" {
@@ -210,10 +210,10 @@ func DownloadFileHandler(c *gin.Context) {
 		return
 	}
 
-	// 移除前导的 /
+	// Remove leading /
 	path = strings.TrimPrefix(path, "/")
 
-	// 确保路径安全
+	// Ensure path safety
 	safePath, err := sanitizePath(path)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -247,7 +247,7 @@ func DownloadFileHandler(c *gin.Context) {
 		return
 	}
 
-	// 尝试根据文件扩展名猜测 Content-Type
+	// Try to guess Content-Type based on file extension
 	contentType := mime.TypeByExtension(filepath.Ext(safePath))
 	if contentType == "" {
 		contentType = "application/octet-stream"
@@ -260,21 +260,21 @@ func DownloadFileHandler(c *gin.Context) {
 	c.File(safePath)
 }
 
-// sanitizePath 确保路径在允许的范围内，防止目录遍历攻击
+// sanitizePath ensures path is within allowed scope, preventing directory traversal attacks
 func sanitizePath(p string) (string, error) {
-	// 清理路径
+	// Clean path
 	cleanPath := filepath.Clean(p)
 
-	// 检查是否尝试访问父目录
+	// Check if attempting to access parent directory
 	if strings.HasPrefix(cleanPath, "..") || strings.Contains(cleanPath, "/../") {
 		return "", fmt.Errorf("invalid path: directory traversal detected")
 	}
 
-	// 如果已经是绝对路径，直接返回
+	// If already absolute path, return directly
 	if filepath.IsAbs(cleanPath) {
 		return cleanPath, nil
 	}
 
-	// 相对路径保持不变，允许在当前工作目录操作
+	// Relative paths remain unchanged, allowing operations in current working directory
 	return cleanPath, nil
 }

@@ -15,7 +15,7 @@ func main() {
 		Port: *port,
 	}
 
-	// 创建并启动服务器
+	// Create and start server
 	server := picod.NewServer(config)
 
 	if err := server.Run(); err != nil {

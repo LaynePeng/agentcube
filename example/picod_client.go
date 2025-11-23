@@ -18,7 +18,7 @@ const (
 	defaultPicoDURL = "http://localhost:9527"
 )
 
-// ExecuteRequest 命令执行请求
+// ExecuteRequest command execution request
 type ExecuteRequest struct {
 	Command    string            `json:"command"`
 	Timeout    float64           `json:"timeout,omitempty"`
@@ -26,7 +26,7 @@ type ExecuteRequest struct {
 	Env        map[string]string `json:"env,omitempty"`
 }
 
-// ExecuteResponse 命令执行响应
+// ExecuteResponse command execution response
 type ExecuteResponse struct {
 	Stdout   string  `json:"stdout"`
 	Stderr   string  `json:"stderr"`
@@ -34,7 +34,7 @@ type ExecuteResponse struct {
 	Duration float64 `json:"duration"`
 }
 
-// FileInfo 文件信息响应
+// FileInfo file information response
 type FileInfo struct {
 	Path     string    `json:"path"`
 	Size     int64     `json:"size"`
@@ -196,7 +196,7 @@ print(f"Sum: {sum(fibonacci)}")
 	log.Println()
 }
 
-// healthCheck 执行健康检查
+// healthCheck performs health check
 func healthCheck(baseURL string) error {
 	resp, err := http.Get(fmt.Sprintf("%s/health", baseURL))
 	if err != nil {
@@ -220,7 +220,7 @@ func healthCheck(baseURL string) error {
 	return nil
 }
 
-// executeCommand 执行命令
+// executeCommand executes command
 func executeCommand(baseURL, command string) (string, error) {
 	req := ExecuteRequest{
 		Command: command,
@@ -263,17 +263,17 @@ func executeCommand(baseURL, command string) (string, error) {
 	return result.Stdout, nil
 }
 
-// uploadFileMultipart 通过 multipart/form-data 上传文件
+// uploadFileMultipart uploads file via multipart/form-data
 func uploadFileMultipart(baseURL, remotePath, content string) error {
 	var buf bytes.Buffer
 	writer := multipart.NewWriter(&buf)
 
-	// 添加 path 字段
+	// Add path field
 	if err := writer.WriteField("path", remotePath); err != nil {
 		return err
 	}
 
-	// 添加 file 字段
+	// Add file field
 	part, err := writer.CreateFormFile("file", "upload.txt")
 	if err != nil {
 		return err
@@ -282,7 +282,7 @@ func uploadFileMultipart(baseURL, remotePath, content string) error {
 		return err
 	}
 
-	// 添加 mode 字段
+	// Add mode field
 	if err := writer.WriteField("mode", "0644"); err != nil {
 		return err
 	}
@@ -313,7 +313,7 @@ func uploadFileMultipart(baseURL, remotePath, content string) error {
 	return nil
 }
 
-// uploadFileJSON 通过 JSON+Base64 上传文件
+// uploadFileJSON uploads file via JSON+Base64
 func uploadFileJSON(baseURL, remotePath, content string) error {
 	encoded := base64.StdEncoding.EncodeToString([]byte(content))
 
@@ -350,9 +350,9 @@ func uploadFileJSON(baseURL, remotePath, content string) error {
 	return nil
 }
 
-// downloadFile 下载文件
+// downloadFile downloads file
 func downloadFile(baseURL, remotePath, localPath string) error {
-	// 移除前导 /
+	// Remove leading /
 	cleanPath := strings.TrimPrefix(remotePath, "/")
 
 	httpReq, err := http.NewRequest("GET", fmt.Sprintf("%s/api/files/%s", baseURL, cleanPath), nil)
@@ -372,7 +372,7 @@ func downloadFile(baseURL, remotePath, localPath string) error {
 		return fmt.Errorf("request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
-	// 创建本地文件
+	// Create local file
 	out, err := os.Create(localPath)
 	if err != nil {
 		return err
@@ -383,7 +383,7 @@ func downloadFile(baseURL, remotePath, localPath string) error {
 	return err
 }
 
-// getEnv 获取环境变量，如果不存在则返回默认值
+// getEnv gets environment variable, returns default if not exists
 func getEnv(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
@@ -391,7 +391,7 @@ func getEnv(key, defaultValue string) string {
 	return defaultValue
 }
 
-// indentOutput 为输出的每一行添加缩进
+// indentOutput adds indentation to each line of output
 func indentOutput(output string) string {
 	lines := strings.Split(strings.TrimSpace(output), "\n")
 	var indented []string
