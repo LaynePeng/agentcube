@@ -18,8 +18,9 @@ type Config struct {
 
 // Server defines the PicoD HTTP server
 type Server struct {
-	engine *gin.Engine
-	config Config
+	engine      *gin.Engine
+	config      Config
+	authManager *AuthManager
 }
 
 // NewServer creates a new PicoD server instance
@@ -33,9 +34,22 @@ func NewServer(config Config) *Server {
 	engine.Use(gin.Logger())   // Request logging
 	engine.Use(gin.Recovery()) // Crash recovery
 
+	// Create auth manager
+	authManager := NewAuthManager()
+
+	// Load existing public key if available
+	if err := authManager.LoadPublicKey(); err != nil {
+		// Log that server is not initialized, but don't fail startup
+		fmt.Printf("Server not initialized: %v\n", err)
+	}
+
+	// Apply authentication middleware
+	engine.Use(authManager.AuthMiddleware())
+
 	// API route group
 	api := engine.Group("/api")
 	{
+		api.POST("/init", authManager.InitHandler)
 		api.POST("/execute", ExecuteHandler)
 		api.POST("/files", UploadFileHandler)
 		api.GET("/files/*path", DownloadFileHandler)
@@ -45,8 +59,9 @@ func NewServer(config Config) *Server {
 	engine.GET("/health", HealthCheckHandler)
 
 	return &Server{
-		engine: engine,
-		config: config,
+		engine:      engine,
+		config:      config,
+		authManager: authManager,
 	}
 }
 
