@@ -72,7 +72,6 @@ spec:
               containerPort: 8080
               protocol: TCP
           args:
-            - --runtime-class-name=
             - --port=8080
             - --runtime-class-name=
           resources:

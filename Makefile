@@ -19,7 +19,7 @@ build-picod:
 
 build-picod-client:
 	@echo "Building picod-client test..."
-	go build -o bin/picod-client ./example/picod_client.go
+	go build -o bin/picod-client ./example/picod/main.go
 
 build-all: build build-agentd build-test-tunnel build-picod build-picod-client
 

@@ -96,6 +96,8 @@ func handleMultipartUpload(c *gin.Context) {
 		mode, err := strconv.ParseUint(modeStr, 8, 32)
 		if err != nil {
 			log.Printf("Warning: Invalid file mode '%s': %v", modeStr, err)
+		} else if mode > 0777 {
+			log.Printf("Warning: Invalid file mode '%s': exceeds 0777", modeStr)
 		} else {
 			if err := os.Chmod(safePath, os.FileMode(mode)); err != nil {
 				log.Printf("Warning: Failed to set file mode for '%s': %v", safePath, err)
@@ -160,26 +162,27 @@ func handleJSONBase64Upload(c *gin.Context) {
 		return
 	}
 
-	// Write file
-	err = os.WriteFile(safePath, decodedContent, 0644)
+	// Parse and validate file permissions
+	fileMode := os.FileMode(0644) // default
+	if req.Mode != "" {
+		mode, err := strconv.ParseUint(req.Mode, 8, 32)
+		if err != nil {
+			log.Printf("Warning: Invalid file mode '%s': %v, using default 0644", req.Mode, err)
+		} else if mode > 0777 {
+			log.Printf("Warning: Invalid file mode '%s': exceeds 0777, using default 0644", req.Mode)
+		} else {
+			fileMode = os.FileMode(mode)
+		}
+	}
+
+	// Write file with the specified permissions
+	err = os.WriteFile(safePath, decodedContent, fileMode)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": fmt.Sprintf("Failed to write file: %v", err),
 			"code":  http.StatusInternalServerError,
 		})
 		return
-	}
-
-	// Set file permissions
-	if req.Mode != "" {
-		mode, err := strconv.ParseUint(req.Mode, 8, 32)
-		if err != nil {
-			log.Printf("Warning: Invalid file mode '%s': %v", req.Mode, err)
-		} else {
-			if err := os.Chmod(safePath, os.FileMode(mode)); err != nil {
-				log.Printf("Warning: Failed to set file mode for '%s': %v", safePath, err)
-			}
-		}
 	}
 
 	stat, err := os.Stat(safePath)
@@ -265,16 +268,25 @@ func sanitizePath(p string) (string, error) {
 	// Clean path
 	cleanPath := filepath.Clean(p)
 
+	// If relative path, convert to absolute based on current working directory
+	if !filepath.IsAbs(cleanPath) {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return "", fmt.Errorf("failed to get current working directory: %w", err)
+		}
+		cleanPath = filepath.Join(cwd, cleanPath)
+	}
+
+	// Get absolute path to ensure normalization
+	absPath, err := filepath.Abs(cleanPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to get absolute path: %w", err)
+	}
+
 	// Check if attempting to access parent directory
-	if strings.HasPrefix(cleanPath, "..") || strings.Contains(cleanPath, "/../") {
+	if strings.Contains(absPath, "..") {
 		return "", fmt.Errorf("invalid path: directory traversal detected")
 	}
 
-	// If already absolute path, return directly
-	if filepath.IsAbs(cleanPath) {
-		return cleanPath, nil
-	}
-
-	// Relative paths remain unchanged, allowing operations in current working directory
-	return cleanPath, nil
+	return absPath, nil
 }
