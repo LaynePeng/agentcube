@@ -213,7 +213,7 @@ class PicoDClient:
             files = {'file': f}
             data = {'path': remote_path, 'mode': '0644'}
             
-            response = requests.post(
+            response = self.session.post(
                 f"{self.base_url}/api/files",
                 files=files,
                 data=data,
