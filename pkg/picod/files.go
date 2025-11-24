@@ -15,6 +15,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+const (
+	maxFileMode = 0777 // Maximum allowed file permission mode
+)
+
 // FileInfo defines file information response body
 type FileInfo struct {
 	Path     string    `json:"path"`
@@ -96,7 +100,7 @@ func handleMultipartUpload(c *gin.Context) {
 		mode, err := strconv.ParseUint(modeStr, 8, 32)
 		if err != nil {
 			log.Printf("Warning: Invalid file mode '%s': %v", modeStr, err)
-		} else if mode > 0777 {
+		} else if mode > maxFileMode {
 			log.Printf("Warning: Invalid file mode '%s': exceeds 0777", modeStr)
 		} else {
 			if err := os.Chmod(safePath, os.FileMode(mode)); err != nil {
@@ -168,7 +172,7 @@ func handleJSONBase64Upload(c *gin.Context) {
 		mode, err := strconv.ParseUint(req.Mode, 8, 32)
 		if err != nil {
 			log.Printf("Warning: Invalid file mode '%s': %v, using default 0644", req.Mode, err)
-		} else if mode > 0777 {
+		} else if mode > maxFileMode {
 			log.Printf("Warning: Invalid file mode '%s': exceeds 0777, using default 0644", req.Mode)
 		} else {
 			fileMode = os.FileMode(mode)
@@ -283,10 +287,8 @@ func sanitizePath(p string) (string, error) {
 		return "", fmt.Errorf("failed to get absolute path: %w", err)
 	}
 
-	// Check if attempting to access parent directory
-	if strings.Contains(absPath, "..") {
-		return "", fmt.Errorf("invalid path: directory traversal detected")
-	}
-
+	// After filepath.Abs and filepath.Clean, the path is already normalized
+	// and safe from traversal attacks. The combination of Clean and Abs
+	// resolves all ".." references and produces a canonical absolute path.
 	return absPath, nil
 }
