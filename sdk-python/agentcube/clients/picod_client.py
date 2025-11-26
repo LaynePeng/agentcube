@@ -10,9 +10,13 @@ This client provides the same interface as SSHClient for easy migration.
 import os
 import shlex
 import base64
-import hashlib
 import time
-from typing import Dict, List, Optional, Tuple
+import json
+import logging
+from datetime import datetime
+from typing import Dict, List, Optional
+
+logger = logging.getLogger(__name__)
 
 try:
     import requests
@@ -115,7 +119,7 @@ class PicoDClient:
         self.key_pair = RSAKeyPair(private_key, public_key)
         self.key_file = key_file
 
-        print(f"✅ RSA key pair generated and saved to {key_file}")
+        logger.info(f"RSA key pair generated and saved to {key_file}")
         return self.key_pair
 
     def load_rsa_key_pair(self, key_file: Optional[str] = None) -> RSAKeyPair:
@@ -179,7 +183,7 @@ class PicoDClient:
                 self.load_rsa_key_pair()
             except FileNotFoundError:
                 # Generate new keys if none exist
-                print("No key pair found. Generating new keys...")
+                logger.info("No key pair found. Generating new keys...")
                 self.generate_rsa_key_pair()
 
         public_key_pem = self.get_public_key_pem()
@@ -199,12 +203,12 @@ class PicoDClient:
             result = response.json()
             if result.get("success"):
                 self.initialized = True
-                print(f"✅ Server initialized: {result.get('message')}")
+                logger.info(f"Server initialized: {result.get('message')}")
                 return True
             else:
                 raise Exception(result.get("message", "Unknown error"))
         except Exception as e:
-            print(f"❌ Server initialization failed: {e}")
+            logger.error(f"Server initialization failed: {e}")
             return False
 
     def _sign_request(self, timestamp: str, body: str) -> str:
@@ -223,12 +227,9 @@ class PicoDClient:
         # Create message: timestamp + body
         message = timestamp + body
 
-        # Hash the message
-        hashed = hashlib.sha256(message.encode('utf-8')).digest()
-
-        # Sign the hash
+        # Sign the message directly (no manual hashing)
         signature = self.key_pair.private_key.sign(
-            hashed,
+            message.encode('utf-8'),
             padding.PKCS1v15(),
             hashes.SHA256()
         )
@@ -252,16 +253,15 @@ class PicoDClient:
         # Get or create request body
         body_str = ""
         if 'json' in kwargs:
-            import json
-            body_str = json.dumps(kwargs['json'])
+            body_str = json.dumps(kwargs['json'], sort_keys=True, separators=(',', ':'))
         elif 'data' in kwargs and isinstance(kwargs['data'], str):
             body_str = kwargs['data']
         elif 'files' in kwargs:
             # For multipart requests, use empty body for signature
             body_str = ""
 
-        # Generate timestamp and signature
-        timestamp = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime()) + "Z"
+        # Generate timestamp with sub-second precision to prevent replay attacks
+        timestamp = datetime.utcnow().isoformat() + 'Z'
         signature = self._sign_request(timestamp, body_str)
 
         # Add headers
