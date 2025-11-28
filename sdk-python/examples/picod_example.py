@@ -7,7 +7,7 @@ The RSA authentication provides secure communication between the client and Pico
 
 Prerequisites:
 1. PicoD server is running (go run cmd/picod/main.go)
-2. Dependencies installed: pip install cryptography requests paramiko
+2. Dependencies installed: pip install cryptography requests
 3. Set PYTHONPATH to sdk-python directory if running from repo root
 
 Environment Variables:

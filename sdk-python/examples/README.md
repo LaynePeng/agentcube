@@ -8,7 +8,7 @@ This directory contains example code for using the PicoD client with RSA authent
 
 ```bash
 # Install dependencies
-pip install cryptography requests paramiko
+pip install cryptography requests
 ```
 
 ### Running the Example
@@ -26,7 +26,7 @@ python3 examples/picod_example.py
 
 ## What the Example Does
 
-The `picod_rsa_example.py` demonstrates:
+The `picod_example.py` demonstrates:
 
 1. **RSA Key Management**
    - Generate RSA-2048 key pair
@@ -136,7 +136,7 @@ with PicoDClient(host="localhost", port=9527) as client:
 - Delete server's `picod_public_key.pem` file and retry
 
 ### Import Errors
-- Install dependencies: `pip install cryptography requests paramiko`
+- Install dependencies: `pip install cryptography requests`
 - Set PYTHONPATH: `export PYTHONPATH=/path/to/sdk-python`
 
 ## Migration from SSH
@@ -159,12 +159,10 @@ The API remains the same for most operations!
 
 ## Files
 
-- `picod_rsa_example.py` - Complete RSA authentication example
+- `picod_example.py` - Complete RSA authentication example
 - `examples.py` - Original examples (legacy)
 - `README.md` - This file
 
 ## Learn More
 
-- See `RSA_AUTHENTICATION.md` for detailed documentation
-- Check `test_picod_auth.py` for unit tests
 - Review `picod_client.py` source code for implementation details
