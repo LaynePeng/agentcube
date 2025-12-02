@@ -13,6 +13,7 @@ import base64
 import time
 import json
 import logging
+import hashlib
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 
@@ -216,8 +217,6 @@ class PicoDClient:
             ValueError: If bootstrap key cannot be loaded
             requests.HTTPError: If initialization request fails
         """
-        import hashlib
-        
         # Generate or load session key pair
         if not self.key_pair:
             try:
@@ -326,8 +325,6 @@ class PicoDClient:
         Raises:
             ValueError: If no key pair is loaded
         """
-        import hashlib
-        
         if not self.key_pair:
             raise ValueError("No key pair loaded. Call start_session() first.")
         
@@ -337,10 +334,8 @@ class PicoDClient:
         # Calculate body hash for JWT claim
         if body_bytes:
             body_hash = hashlib.sha256(body_bytes).hexdigest()
-        elif files or data:
-            # For multipart requests, use empty hash as we can't easily compute it
-            body_hash = hashlib.sha256(b"").hexdigest()
         else:
+            # For GET requests, multipart, or no body, use hash of empty string
             body_hash = hashlib.sha256(b"").hexdigest()
         
         # Create JWT with body hash

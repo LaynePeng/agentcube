@@ -22,6 +22,12 @@ const (
 	KeyFile = "picod_public_key.pem"
 )
 
+// chattrAvailable caches whether the chattr command is available (Linux-specific)
+var chattrAvailable = func() bool {
+	_, err := exec.LookPath("chattr")
+	return err == nil
+}()
+
 // AuthManager manages RSA public key authentication
 type AuthManager struct {
 	publicKey    *rsa.PublicKey
@@ -140,8 +146,8 @@ func (am *AuthManager) SavePublicKey(publicKeyStr string) error {
 		return fmt.Errorf("failed to save public key file: %v", err)
 	}
 
-	// Try to make the file immutable (Linux only)
-	if _, err := exec.LookPath("chattr"); err == nil {
+	// Try to make the file immutable (Linux only, uses cached check)
+	if chattrAvailable {
 		if err := exec.Command("chattr", "+i", am.keyFile).Run(); err != nil {
 			log.Printf("Warning: Failed to make public key immutable: %v", err)
 		} else {
