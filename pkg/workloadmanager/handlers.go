@@ -176,6 +176,7 @@ func (s *Server) handleCreateSandbox(c *gin.Context) {
 		c.Request.Context(),
 		initEndpoint,
 		sandbox.Labels[SessionIdLabelKey],
+		createAgentRequest.PublicKey,
 		createAgentRequest.Metadata,
 	)
 
