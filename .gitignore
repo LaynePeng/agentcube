@@ -261,3 +261,4 @@ kubeconfig
 # Temporary files
 tmp/
 temp/
+picod
