@@ -14,7 +14,7 @@ import time
 import json
 import logging
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 
 logger = logging.getLogger(__name__)
 
@@ -48,8 +48,13 @@ class RSAKeyPair:
 class PicoDClient:
     """Client for interacting with PicoD daemon via REST API
 
-    This client provides the same interface as SandboxSSHClient,
-    making it an alternative to SSH-based communication.
+    This client implements JWT-based authentication with the PicoD server.
+    It requires a session to be established via start_session() before making requests.
+    
+    Usage:
+        client = PicoDClient(api_url="http://gateway:8080", namespace="default", name="my-sandbox")
+        client.start_session()  # Establishes session with server
+        output = client.execute_command("echo hello")
     """
 
     def __init__(
@@ -159,11 +164,9 @@ class PicoDClient:
         }
         claims.update(claims_payload)
 
-        # Create JWT header (RS256 is default for cryptography lib)
-        # Manually constructing JWT as there's no official PyJWT for cryptography's RSA keys directly
-        # This is a simplified JWT creation for RS256
-        jwt_header = json.dumps({"alg": "RS256", "typ": "JWT"}).encode("utf-8")
-        jwt_claims = json.dumps(claims).encode("utf-8")
+        # Create JWT header and claims with sorted keys for consistency
+        jwt_header = json.dumps({"alg": "RS256", "typ": "JWT"}, sort_keys=True).encode("utf-8")
+        jwt_claims = json.dumps(claims, sort_keys=True).encode("utf-8")
 
         encoded_header = base64.urlsafe_b64encode(jwt_header).rstrip(b"=")
         encoded_claims = base64.urlsafe_b64encode(jwt_claims).rstrip(b"=")
@@ -178,6 +181,196 @@ class PicoDClient:
         encoded_signature = base64.urlsafe_b64encode(signature).rstrip(b"=")
 
         return unsigned_token.decode("utf-8") + "." + encoded_signature.decode("utf-8")
+
+    def get_public_key_pem(self) -> str:
+        """Get the public key in PEM format
+        
+        Returns:
+            Public key as PEM-encoded string
+            
+        Raises:
+            ValueError: If no key pair is loaded
+        """
+        if not self.key_pair:
+            raise ValueError("No key pair loaded. Generate or load keys first.")
+        
+        public_pem = self.key_pair.public_key.public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo
+        )
+        return public_pem.decode('utf-8')
+
+    def start_session(self, bootstrap_key_file: Optional[str] = None) -> None:
+        """Establish a session with the PicoD server
+        
+        This method generates (or loads) an RSA key pair, creates a JWT signed
+        with a bootstrap key containing the session public key, and calls the
+        /api/init endpoint to register the session.
+        
+        Args:
+            bootstrap_key_file: Path to the bootstrap private key file.
+                               If not provided, will try to load from environment
+                               variable PICOD_BOOTSTRAP_KEY_FILE or use default path.
+        
+        Raises:
+            ValueError: If bootstrap key cannot be loaded
+            requests.HTTPError: If initialization request fails
+        """
+        import hashlib
+        
+        # Generate or load session key pair
+        if not self.key_pair:
+            try:
+                self.load_rsa_key_pair()
+                logger.info("Loaded existing RSA key pair")
+            except FileNotFoundError:
+                self.generate_rsa_key_pair()
+                logger.info("Generated new RSA key pair")
+        
+        # Load bootstrap key
+        bootstrap_key_file = bootstrap_key_file or os.environ.get(
+            'PICOD_BOOTSTRAP_KEY_FILE', 
+            'bootstrap_private.pem'
+        )
+        
+        if not os.path.exists(bootstrap_key_file):
+            raise ValueError(
+                f"Bootstrap private key not found: {bootstrap_key_file}. "
+                "Set PICOD_BOOTSTRAP_KEY_FILE environment variable or provide the path."
+            )
+        
+        with open(bootstrap_key_file, 'rb') as f:
+            bootstrap_private_key = serialization.load_pem_private_key(
+                f.read(),
+                password=None,
+                backend=default_backend()
+            )
+        
+        # Get session public key in PEM format
+        session_public_key_pem = self.get_public_key_pem()
+        
+        # Create JWT claims with session public key
+        now = int(time.time())
+        claims = {
+            "iss": "sdk-client",
+            "iat": now,
+            "exp": now + 300,
+            "session_public_key": session_public_key_pem,
+        }
+        
+        # Create JWT header and claims
+        jwt_header = json.dumps({"alg": "RS256", "typ": "JWT"}, sort_keys=True).encode("utf-8")
+        jwt_claims = json.dumps(claims, sort_keys=True).encode("utf-8")
+        
+        encoded_header = base64.urlsafe_b64encode(jwt_header).rstrip(b"=")
+        encoded_claims = base64.urlsafe_b64encode(jwt_claims).rstrip(b"=")
+        
+        unsigned_token = encoded_header + b"." + encoded_claims
+        
+        # Sign with bootstrap key
+        signature = bootstrap_private_key.sign(
+            unsigned_token,
+            padding.PKCS1v15(),
+            hashes.SHA256()
+        )
+        encoded_signature = base64.urlsafe_b64encode(signature).rstrip(b"=")
+        
+        init_jwt = unsigned_token.decode("utf-8") + "." + encoded_signature.decode("utf-8")
+        
+        # Construct URL for init endpoint
+        url = f"{self.gateway_url}/api/v1/namespaces/{self.namespace}/invocations/{self.name}/api/init"
+        
+        headers = {
+            "Authorization": f"Bearer {init_jwt}",
+            "Content-Type": "application/json",
+        }
+        
+        response = self.session.post(
+            url,
+            headers=headers,
+            timeout=self.timeout,
+        )
+        
+        response.raise_for_status()
+        result = response.json()
+        
+        if result.get("success"):
+            logger.info("Session established successfully")
+        else:
+            raise Exception(f"Session initialization failed: {result.get('message', 'Unknown error')}")
+
+    def _make_authenticated_request(
+        self,
+        method: str,
+        path: str,
+        body_bytes: Optional[bytes] = None,
+        files: Optional[Dict] = None,
+        data: Optional[Dict] = None,
+        stream: bool = False,
+        timeout: Optional[float] = None,
+    ) -> requests.Response:
+        """Make an authenticated request to the PicoD server
+        
+        Args:
+            method: HTTP method (GET, POST, etc.)
+            path: API path relative to the invocations URL (e.g., "api/execute")
+            body_bytes: Request body as bytes (for JSON requests)
+            files: Files dict for multipart uploads
+            data: Form data for multipart uploads
+            stream: Whether to stream the response
+            timeout: Request timeout in seconds
+            
+        Returns:
+            requests.Response object
+            
+        Raises:
+            ValueError: If no key pair is loaded
+        """
+        import hashlib
+        
+        if not self.key_pair:
+            raise ValueError("No key pair loaded. Call start_session() first.")
+        
+        # Construct full URL
+        url = f"{self.gateway_url}/api/v1/namespaces/{self.namespace}/invocations/{self.name}/{path}"
+        
+        # Calculate body hash for JWT claim
+        if body_bytes:
+            body_hash = hashlib.sha256(body_bytes).hexdigest()
+        elif files or data:
+            # For multipart requests, use empty hash as we can't easily compute it
+            body_hash = hashlib.sha256(b"").hexdigest()
+        else:
+            body_hash = hashlib.sha256(b"").hexdigest()
+        
+        # Create JWT with body hash
+        claims = {
+            "body_sha256": body_hash,
+        }
+        jwt_token = self._create_signed_jwt(claims)
+        
+        headers = {
+            "Authorization": f"Bearer {jwt_token}",
+        }
+        
+        if body_bytes:
+            headers["Content-Type"] = "application/json"
+        
+        request_kwargs = {
+            "headers": headers,
+            "timeout": timeout or self.timeout,
+            "stream": stream,
+        }
+        
+        if body_bytes:
+            request_kwargs["data"] = body_bytes
+        if files:
+            request_kwargs["files"] = files
+        if data:
+            request_kwargs["data"] = data
+        
+        response = self.session.request(method, url, **request_kwargs)
+        return response
     
     def execute_command(
         self,

@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -140,7 +141,15 @@ func (am *AuthManager) SavePublicKey(publicKeyStr string) error {
 	}
 
 	// Try to make the file immutable (Linux only)
-	exec.Command("chattr", "+i", am.keyFile).Run()
+	if _, err := exec.LookPath("chattr"); err == nil {
+		if err := exec.Command("chattr", "+i", am.keyFile).Run(); err != nil {
+			log.Printf("Warning: Failed to make public key immutable: %v", err)
+		} else {
+			log.Println("Public key file made immutable")
+		}
+	} else {
+		log.Println("Info: 'chattr' not found; skipping immutability of public key file (Linux-specific feature)")
+	}
 
 	am.publicKey = rsaPub
 	am.initialized = true
@@ -171,7 +180,7 @@ func (am *AuthManager) InitHandler(c *gin.Context) {
 		c.JSON(http.StatusServiceUnavailable, gin.H{
 			"error":  "PicoD is not configured for secure initialization",
 			"code":   http.StatusServiceUnavailable,
-			"detail": "Bootstrap key is missing. Please configure PICOD_BOOTSTRAP_KEY environment variable.",
+			"detail": "Bootstrap key is missing. Please provide it via the -bootstrap-key flag or place it at /etc/picod/bootstrap.pem",
 		})
 		return
 	}
@@ -258,16 +267,20 @@ func (am *AuthManager) AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// Check if server is initialized
-		if !am.IsInitialized() {
-			c.JSON(http.StatusForbidden, gin.H{
+		// Verify server is initialized before attempting auth
+		am.mutex.RLock()
+		if !am.initialized || am.publicKey == nil {
+			am.mutex.RUnlock()
+			c.JSON(http.StatusServiceUnavailable, gin.H{
 				"error":  "Server not initialized",
-				"code":   http.StatusForbidden,
-				"detail": "Please initialize this Picod instance first via /api/init",
+				"code":   http.StatusServiceUnavailable,
+				"detail": "Please initialize server with public key first",
 			})
 			c.Abort()
 			return
 		}
+		publicKey := am.publicKey
+		am.mutex.RUnlock()
 
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
@@ -298,13 +311,7 @@ func (am *AuthManager) AuthMiddleware() gin.HandlerFunc {
 			if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
 				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 			}
-			// Use the session public key for verification
-			// Lock is handled by IsInitialized check above, but safe to read pointer here
-			// strictly speaking we should lock to read am.publicKey if it can change,
-			// but it's set once at init.
-			am.mutex.RLock()
-			defer am.mutex.RUnlock()
-			return am.publicKey, nil
+			return publicKey, nil
 		})
 
 		if err != nil || !token.Valid {
@@ -342,35 +349,30 @@ func (am *AuthManager) AuthMiddleware() gin.HandlerFunc {
 		// Restore request body for subsequent handlers
 		c.Request.Body = &RequestBody{Buffer: bytes.NewBuffer(bodyBytes)}
 
-		// Verify body hash if present in claims
-		// We mandate body_sha256 for requests with body to ensure integrity
-		if claimHash, ok := claims["body_sha256"].(string); ok {
-			// Calculate SHA256 of actual body
-			hash := sha256.Sum256(bodyBytes)
-			computedHash := fmt.Sprintf("%x", hash)
+		// Always require body_sha256 claim for integrity verification
+		claimHash, ok := claims["body_sha256"].(string)
+		if !ok {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error":  "Missing body_sha256 claim",
+				"code":   http.StatusUnauthorized,
+				"detail": "Token must contain body_sha256 claim for integrity",
+			})
+			c.Abort()
+			return
+		}
 
-			if claimHash != computedHash {
-				c.JSON(http.StatusUnauthorized, gin.H{
-					"error":  "Body integrity check failed",
-					"code":   http.StatusUnauthorized,
-					"detail": "The request body does not match the body_sha256 claim",
-				})
-				c.Abort()
-				return
-			}
-		} else {
-			// Ideally we should enforce this, but for GET requests without body it might be empty.
-			// For now, if body is not empty, enforce hash presence?
-			// Let's enforce it if the body is not empty.
-			if len(bodyBytes) > 0 {
-				c.JSON(http.StatusUnauthorized, gin.H{
-					"error":  "Missing body_sha256 claim",
-					"code":   http.StatusUnauthorized,
-					"detail": "Token must contain body_sha256 claim for integrity",
-				})
-				c.Abort()
-				return
-			}
+		// Calculate SHA256 of actual body (empty string if no body)
+		hash := sha256.Sum256(bodyBytes)
+		computedHash := fmt.Sprintf("%x", hash)
+
+		if claimHash != computedHash {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error":  "Body integrity check failed",
+				"code":   http.StatusUnauthorized,
+				"detail": "The request body does not match the body_sha256 claim",
+			})
+			c.Abort()
+			return
 		}
 
 		c.Next()
