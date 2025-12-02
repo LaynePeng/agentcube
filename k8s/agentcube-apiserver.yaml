@@ -41,6 +41,15 @@ rules:
   - apiGroups: ["runtime.agentcube.volcano.sh"]
     resources: ["codeinterpreters/finalizers"]
     verbs: ["update"]
+  - apiGroups: ["runtime.agentcube.volcano.sh"]
+    resources: ["agentruntimes"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["runtime.agentcube.volcano.sh"]
+    resources: ["agentruntimes/status"]
+    verbs: ["get", "update", "patch"]
+  - apiGroups: ["runtime.agentcube.volcano.sh"]
+    resources: ["agentruntimes/finalizers"]
+    verbs: ["update"]
   - apiGroups: [""]
     resources: ["pods"]
     verbs: ["get", "list", "watch"]
@@ -92,6 +101,11 @@ spec:
           args:
             - --port=8080
             - --runtime-class-name=
+          env:
+            - name: REDIS_ADDR
+              value: "redis:6379"
+            - name: REDIS_PASSWORD
+              value: "redispassword"
           resources:
             requests:
               cpu: 100m
