@@ -98,6 +98,11 @@ spec:
             - name: http
               containerPort: 8080
               protocol: TCP
+          env:
+            - name: REDIS_ADDR
+              value: "127.0.0.1:6379"
+            - name: REDIS_PASSWORD
+              value: ""
           args:
             - --port=8080
             - --runtime-class-name=
